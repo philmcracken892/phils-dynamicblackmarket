@@ -1,0 +1,6 @@
+['blackmarket'] = {
+    { name = 'bread', amount = 50, price = 1 },
+    { name = 'water', amount = 50, price = 1 },
+    },
+
+    you can add as many items as needed
