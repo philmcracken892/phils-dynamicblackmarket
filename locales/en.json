@@ -1,0 +1,19 @@
+{
+  "cl_lang_1": "Black Market",
+  "cl_lang_2": "Open Market",
+  "cl_lang_3": "Sell Items",
+  "cl_lang_4": "Black market has moved to a new location!",
+  "cl_lang_5": "Black market prices have been updated!",
+  "cl_lang_6": "No Items",
+  "cl_lang_7": "You have no items to sell!",
+  "cl_lang_8": "Sell %s for $%d each (You have: %d)",
+  "cl_lang_9": "Sell Items",
+  "cl_lang_10": "Amount",
+  "cl_lang_11": "Items to sell",
+  "cl_lang_12": "Error",
+  "cl_lang_13": "Invalid amount!",
+  "cl_lang_14": "Black Market - Sell Items",
+  "sv_lang_1": "Unknown Item",
+  "sv_lang_2": "You don't have enough of this item!",
+  "sv_lang_3": "You sold %dx %s for $%d"
+}

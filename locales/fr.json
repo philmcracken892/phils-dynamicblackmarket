@@ -1,0 +1,19 @@
+{
+  "cl_lang_1": "Marché Noir",
+  "cl_lang_2": "Ouvrir le Marché",
+  "cl_lang_3": "Vendre des Articles",
+  "cl_lang_4": "Le marché noir a déménagé vers un nouvel emplacement !",
+  "cl_lang_5": "Les prix du marché noir ont été mis à jour !",
+  "cl_lang_6": "Aucun Article",
+  "cl_lang_7": "Vous n'avez aucun article à vendre !",
+  "cl_lang_8": "Vendre %s pour $%d chacun (Vous avez : %d)",
+  "cl_lang_9": "Vendre des Articles",
+  "cl_lang_10": "Quantité",
+  "cl_lang_11": "Articles à vendre",
+  "cl_lang_12": "Erreur",
+  "cl_lang_13": "Quantité invalide !",
+  "cl_lang_14": "Marché Noir - Vendre des Articles",
+  "sv_lang_1": "Article Inconnu",
+  "sv_lang_2": "Vous n'avez pas assez de cet article !",
+  "sv_lang_3": "Vous avez vendu %dx %s pour $%d"
+}

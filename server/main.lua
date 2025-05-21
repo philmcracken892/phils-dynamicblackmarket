@@ -1,13 +1,15 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
-local coords = nil
-local sales = {} 
-local currentPrices = {} 
+lib.locale()
 
+local coords = nil
+local sales = {}
+local currentPrices = {}
 
 local function LoadMarketData()
     local result = exports.oxmysql:fetchSync('SELECT item, sales, price FROM blackmarket_data')
     sales = {}
     currentPrices = {}
+    
     if result then
         for _, row in ipairs(result) do
             sales[row.item] = row.sales or 0
@@ -23,14 +25,12 @@ local function LoadMarketData()
     end
 end
 
-
 local function SaveMarketData()
     for item, salesCount in pairs(sales) do
         local price = currentPrices[item] or (Config.SpecialItemPrices[item] and Config.SpecialItemPrices[item].base or Config.DefaultSellPrice)
         exports.oxmysql:executeSync('INSERT INTO blackmarket_data (item, sales, price) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE sales = ?, price = ?', {item, salesCount, price, salesCount, price})
     end
 end
-
 
 Citizen.CreateThread(function()
     LoadMarketData() -- Load initial data
@@ -45,11 +45,12 @@ Citizen.CreateThread(function()
     end
 end)
 
-
 Citizen.CreateThread(function()
     if not Config.DynamicPricing then return end
+    
     while true do
         Wait(Config.PriceUpdateInterval * 60000)
+        
         for item, priceData in pairs(Config.SpecialItemPrices) do
             local salesCount = sales[item] or 0
             local basePrice = priceData.base
@@ -58,6 +59,7 @@ Citizen.CreateThread(function()
             local newPrice = math.max(priceData.min, math.min(priceData.max, currentPrice - adjustment))
             currentPrices[item] = math.floor(newPrice)
         end
+        
         for item, _ in pairs(sales) do
             if not Config.SpecialItemPrices[item] then
                 local basePrice = Config.DefaultSellPrice
@@ -67,6 +69,7 @@ Citizen.CreateThread(function()
                 currentPrices[item] = math.floor(newPrice)
             end
         end
+        
         SaveMarketData()
         TriggerClientEvent('phils-blackmarket:client:priceUpdate', -1, currentPrices)
     end
@@ -75,6 +78,7 @@ end)
 -- Reset sales tracking periodically
 Citizen.CreateThread(function()
     if not Config.DynamicPricing then return end
+    
     while true do
         Wait(Config.SalesResetInterval * 60000)
         sales = {}
@@ -83,43 +87,41 @@ Citizen.CreateThread(function()
     end
 end)
 
-
 RSGCore.Functions.CreateCallback('phils-blackmarket:server:getCoords', function(source, cb)
     cb(coords)
 end)
 
-
 RSGCore.Functions.CreateCallback('phils-blackmarket:server:getInventory', function(source, cb)
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player then 
+    if not Player then
         return cb({})
     end
     
     local inventory = {}
+    
     for slot, item in pairs(Player.PlayerData.items or {}) do
         if item and item.amount > 0 then
             table.insert(inventory, {
                 name = item.name,
-                label = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or "Unknown Item",
+                label = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or locale('sv_lang_1'),
                 amount = item.amount
             })
         end
     end
+    
     cb(inventory)
 end)
-
 
 RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
     local src = source
     local Player = RSGCore.Functions.GetPlayer(src)
-    
     if not Player then return end
     
     local itemData = Player.Functions.GetItemByName(item)
     if not itemData or itemData.amount < amount then
         TriggerClientEvent('ox_lib:notify', src, {
-            title = 'Error',
-            description = "You don't have enough of this item!",
+            title = locale('cl_lang_12'),
+            description = locale('sv_lang_2'),
             type = 'error',
             timeout = 3000
         })
@@ -133,13 +135,12 @@ RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
     TriggerClientEvent('inventory:client:ItemBox', src, RSGCore.Shared.Items[item], 'remove')
     Player.Functions.AddMoney('cash', totalPrice)
     
-    
     sales[item] = (sales[item] or 0) + amount
     SaveMarketData()
     
     TriggerClientEvent('ox_lib:notify', src, {
-        title = 'Black Market',
-        description = string.format("You sold %dx %s for $%d", amount, RSGCore.Shared.Items[item].label, totalPrice),
+        title = locale('cl_lang_1'),
+        description = string.format(locale('sv_lang_3'), amount, RSGCore.Shared.Items[item].label, totalPrice),
         type = 'success',
         timeout = 3000
     })

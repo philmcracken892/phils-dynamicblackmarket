@@ -22,4 +22,8 @@ client_scripts {
     'client/main.lua'
 }
 
+files {
+    'locales/*.json'
+}
+
 lua54 'yes'
