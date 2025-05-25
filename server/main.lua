@@ -1,7 +1,8 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
+local sales = {}
+local currentPrices = {}
 local coords = nil
-local sales = {} 
-local currentPrices = {} 
+local pedCreator = nil
 
 
 local function LoadMarketData()
@@ -14,7 +15,6 @@ local function LoadMarketData()
             currentPrices[row.item] = row.price or (Config.SpecialItemPrices[row.item] and Config.SpecialItemPrices[row.item].base or Config.DefaultSellPrice)
         end
     end
-    
     for item, priceData in pairs(Config.SpecialItemPrices) do
         if not currentPrices[item] then
             currentPrices[item] = priceData.base
@@ -22,7 +22,6 @@ local function LoadMarketData()
         end
     end
 end
-
 
 local function SaveMarketData()
     for item, salesCount in pairs(sales) do
@@ -33,19 +32,20 @@ end
 
 
 Citizen.CreateThread(function()
-    LoadMarketData() -- Load initial data
+    LoadMarketData()
     coords = Config.BlackmarketPositions[math.random(1, #Config.BlackmarketPositions)]
     
     if Config.BlackmarketCycling then
         while true do
             Wait(Config.CycleInterval * 60000)
             coords = Config.BlackmarketPositions[math.random(1, #Config.BlackmarketPositions)]
+            pedCreator = nil
             TriggerClientEvent('phils-blackmarket:client:newPos', -1, coords)
         end
     end
 end)
 
-
+-- Dynamic pricing
 Citizen.CreateThread(function()
     if not Config.DynamicPricing then return end
     while true do
@@ -72,7 +72,7 @@ Citizen.CreateThread(function()
     end
 end)
 
--- Reset sales tracking periodically
+
 Citizen.CreateThread(function()
     if not Config.DynamicPricing then return end
     while true do
@@ -85,38 +85,64 @@ end)
 
 
 RSGCore.Functions.CreateCallback('phils-blackmarket:server:getCoords', function(source, cb)
-    cb(coords)
+    if not pedCreator then
+        pedCreator = source
+        
+    end
+    cb(coords, pedCreator == source)
 end)
 
 
 RSGCore.Functions.CreateCallback('phils-blackmarket:server:getInventory', function(source, cb)
+   
     local Player = RSGCore.Functions.GetPlayer(source)
-    if not Player then 
-        return cb({})
+    if not Player then
+       
+        cb({})
+        return
     end
-    
+
     local inventory = {}
-    for slot, item in pairs(Player.PlayerData.items or {}) do
-        if item and item.amount > 0 then
+    local items = Player.PlayerData.items or {}
+  
+
+    for slot, item in pairs(items) do
+        if item and item.name and item.amount and item.amount > 0 then
+            local itemLabel = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or "Unknown Item"
             table.insert(inventory, {
                 name = item.name,
-                label = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or "Unknown Item",
+                label = itemLabel,
                 amount = item.amount
             })
+        else
+            
         end
     end
+
+   
     cb(inventory)
 end)
 
 
 RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
     local src = source
+  
     local Player = RSGCore.Functions.GetPlayer(src)
     
-    if not Player then return end
+    if not Player then
+      
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = 'Error',
+            description = "Player data not found!",
+            type = 'error',
+            timeout = 3000
+        })
+        return
+    end
     
     local itemData = Player.Functions.GetItemByName(item)
     if not itemData or itemData.amount < amount then
+       
         TriggerClientEvent('ox_lib:notify', src, {
             title = 'Error',
             description = "You don't have enough of this item!",
@@ -132,7 +158,6 @@ RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
     Player.Functions.RemoveItem(item, amount)
     TriggerClientEvent('inventory:client:ItemBox', src, RSGCore.Shared.Items[item], 'remove')
     Player.Functions.AddMoney('cash', totalPrice)
-    
     
     sales[item] = (sales[item] or 0) + amount
     SaveMarketData()
