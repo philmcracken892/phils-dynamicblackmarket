@@ -1,7 +1,7 @@
 local RSGCore = exports['rsg-core']:GetCoreObject()
 local blackmarketPed = nil
 local currentBlip = nil
-local currentPrices = {} -- Track dynamic prices
+local currentPrices = {}
 
 
 local function CleanupBlackMarket()
@@ -16,28 +16,59 @@ local function CleanupBlackMarket()
 end
 
 
-local function CreateBlackMarket(coords)
-    if not coords then return end
+local function SetupBlackMarket(coords, shouldCreatePed)
     CleanupBlackMarket()
     
-    local model = Config.BlackmarketPed
-    RequestModel(model)
-    while not HasModelLoaded(model) do
-        Wait(10)
+    if shouldCreatePed then
+        local model = Config.BlackmarketPed
+        RequestModel(model)
+        while not HasModelLoaded(model) do
+            Wait(10)
+        end
+        
+        blackmarketPed = CreatePed(model, coords.x, coords.y, coords.z - 1.0, coords.w, true, true)
+        Citizen.InvokeNative(0x283978A15512B2FE, blackmarketPed, true)
+        FreezeEntityPosition(blackmarketPed, true)
+        SetEntityInvincible(blackmarketPed, true)
+        SetBlockingOfNonTemporaryEvents(blackmarketPed, true)
+        
+    else
+        
+        local timeout = 10000 -- 10 seconds
+        local startTime = GetGameTimer()
+        while not blackmarketPed and GetGameTimer() - startTime < timeout do
+            for _, ped in ipairs(GetGamePool('CPed')) do
+                if GetEntityModel(ped) == Config.BlackmarketPed then
+                    local pedCoords = GetEntityCoords(ped)
+                    if #(vector3(coords.x, coords.y, coords.z) - pedCoords) < 2.0 then
+                        blackmarketPed = ped
+                       
+                        break
+                    end
+                end
+            end
+            Wait(100)
+        end
+        if not blackmarketPed then
+           
+            lib.notify({
+                title = 'Error',
+                description = 'Could not find black market NPC. Try again later.',
+                type = 'error',
+                timeout = 5000
+            })
+            return
+        end
     end
     
-    blackmarketPed = CreatePed(model, coords.x, coords.y, coords.z - 1.0, coords.w, true, false, 0, 0)
-    Citizen.InvokeNative(0x283978A15512B2FE, blackmarketPed, true)
-    FreezeEntityPosition(blackmarketPed, true)
-    SetEntityInvincible(blackmarketPed, true)
-    SetBlockingOfNonTemporaryEvents(blackmarketPed, true)
-    
+    -- Create blip
     currentBlip = Citizen.InvokeNative(0x554D9D53F696D002, 1664425300, coords.x, coords.y, coords.z)
     SetBlipSprite(currentBlip, joaat('blip_cash_arthur'), true)
     SetBlipScale(currentBlip, 0.2)
     Citizen.InvokeNative(0x662D364ABF16DE2F, currentBlip, joaat('BLIP_MODIFIER_MP_COLOR_6'))
     Citizen.InvokeNative(0x9CB1A1623062F402, currentBlip, 'Black Market')
     
+  
     local targetOptions = {
         {
             label = 'Open Market',
@@ -68,8 +99,8 @@ Citizen.CreateThread(function()
         end
     end
     Wait(1000)
-    RSGCore.Functions.TriggerCallback('phils-blackmarket:server:getCoords', function(coords)
-        CreateBlackMarket(coords)
+    RSGCore.Functions.TriggerCallback('phils-blackmarket:server:getCoords', function(coords, shouldCreatePed)
+        SetupBlackMarket(coords, shouldCreatePed)
     end)
 end)
 
@@ -82,7 +113,9 @@ AddEventHandler('phils-blackmarket:client:newPos', function(coords)
         type = 'info',
         timeout = 5000
     })
-    CreateBlackMarket(coords)
+    RSGCore.Functions.TriggerCallback('phils-blackmarket:server:getCoords', function(newCoords, shouldCreatePed)
+        SetupBlackMarket(newCoords, shouldCreatePed)
+    end)
 end)
 
 
@@ -100,13 +133,15 @@ end)
 
 function OpenSellMenu()
     RSGCore.Functions.TriggerCallback('phils-blackmarket:server:getInventory', function(inventory)
+       
         if not inventory or next(inventory) == nil then
-            return lib.notify({ 
+            lib.notify({ 
                 title = 'No Items', 
                 description = 'You have no items to sell!', 
                 type = 'error', 
                 timeout = 3000 
             })
+            return
         end
 
         local options = {}
@@ -114,7 +149,7 @@ function OpenSellMenu()
             local itemName = item.name
             local itemLabel = item.label
             local itemAmount = item.amount
-            local sellPrice = currentPrices[itemName] or Config.SpecialItemPrices[itemName] and Config.SpecialItemPrices[itemName].base or Config.DefaultSellPrice
+            local sellPrice = currentPrices[itemName] or (Config.SpecialItemPrices[itemName] and Config.SpecialItemPrices[itemName].base or Config.DefaultSellPrice)
             
             table.insert(options, {
                 title = itemLabel,
