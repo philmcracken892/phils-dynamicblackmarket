@@ -11,10 +11,14 @@ local function LoadMarketData()
     currentPrices = {}
     if result then
         for _, row in ipairs(result) do
-            sales[row.item] = row.sales or 0
-            currentPrices[row.item] = row.price or (Config.SpecialItemPrices[row.item] and Config.SpecialItemPrices[row.item].base or Config.DefaultSellPrice)
+            -- Only load data for special items
+            if Config.SpecialItemPrices[row.item] then
+                sales[row.item] = row.sales or 0
+                currentPrices[row.item] = row.price or Config.SpecialItemPrices[row.item].base
+            end
         end
     end
+    -- Initialize all special items
     for item, priceData in pairs(Config.SpecialItemPrices) do
         if not currentPrices[item] then
             currentPrices[item] = priceData.base
@@ -25,8 +29,11 @@ end
 
 local function SaveMarketData()
     for item, salesCount in pairs(sales) do
-        local price = currentPrices[item] or (Config.SpecialItemPrices[item] and Config.SpecialItemPrices[item].base or Config.DefaultSellPrice)
-        exports.oxmysql:executeSync('INSERT INTO blackmarket_data (item, sales, price) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE sales = ?, price = ?', {item, salesCount, price, salesCount, price})
+        -- Only save data for special items
+        if Config.SpecialItemPrices[item] then
+            local price = currentPrices[item] or Config.SpecialItemPrices[item].base
+            exports.oxmysql:executeSync('INSERT INTO blackmarket_data (item, sales, price) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE sales = ?, price = ?', {item, salesCount, price, salesCount, price})
+        end
     end
 end
 
@@ -57,15 +64,6 @@ Citizen.CreateThread(function()
             local adjustment = salesCount * Config.PriceAdjustmentRate * basePrice
             local newPrice = math.max(priceData.min, math.min(priceData.max, currentPrice - adjustment))
             currentPrices[item] = math.floor(newPrice)
-        end
-        for item, _ in pairs(sales) do
-            if not Config.SpecialItemPrices[item] then
-                local basePrice = Config.DefaultSellPrice
-                local currentPrice = currentPrices[item] or basePrice
-                local adjustment = sales[item] * Config.PriceAdjustmentRate * basePrice
-                local newPrice = math.max(Config.DefaultMinPrice, math.min(Config.DefaultMaxPrice, currentPrice - adjustment))
-                currentPrices[item] = math.floor(newPrice)
-            end
         end
         SaveMarketData()
         TriggerClientEvent('phils-blackmarket:client:priceUpdate', -1, currentPrices)
@@ -108,14 +106,15 @@ RSGCore.Functions.CreateCallback('phils-blackmarket:server:getInventory', functi
 
     for slot, item in pairs(items) do
         if item and item.name and item.amount and item.amount > 0 then
-            local itemLabel = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or "Unknown Item"
-            table.insert(inventory, {
-                name = item.name,
-                label = itemLabel,
-                amount = item.amount
-            })
-        else
-            
+            -- Only include items that are in the special items list
+            if Config.SpecialItemPrices[item.name] then
+                local itemLabel = RSGCore.Shared.Items[item.name] and RSGCore.Shared.Items[item.name].label or "Unknown Item"
+                table.insert(inventory, {
+                    name = item.name,
+                    label = itemLabel,
+                    amount = item.amount
+                })
+            end
         end
     end
 
@@ -140,6 +139,17 @@ RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
         return
     end
     
+    -- Check if item is in special items list
+    if not Config.SpecialItemPrices[item] then
+        TriggerClientEvent('ox_lib:notify', src, {
+            title = 'Error',
+            description = "This item cannot be sold here!",
+            type = 'error',
+            timeout = 3000
+        })
+        return
+    end
+    
     local itemData = Player.Functions.GetItemByName(item)
     if not itemData or itemData.amount < amount then
        
@@ -152,7 +162,7 @@ RegisterNetEvent('phils-blackmarket:server:sellItems', function(item, amount)
         return
     end
     
-    local pricePerItem = currentPrices[item] or (Config.SpecialItemPrices[item] and Config.SpecialItemPrices[item].base or Config.DefaultSellPrice)
+    local pricePerItem = currentPrices[item] or Config.SpecialItemPrices[item].base
     local totalPrice = pricePerItem * amount
     
     Player.Functions.RemoveItem(item, amount)
